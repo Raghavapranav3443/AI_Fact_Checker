@@ -1,0 +1,78 @@
+.text-annotator {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.ta-legend {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
+  padding: 0.625rem 1rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-md);
+}
+
+.ta-legend-item {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  font-size: 0.72rem;
+}
+
+.ta-swatch {
+  width: 8px; height: 8px;
+  border-radius: 2px;
+  flex-shrink: 0;
+}
+
+.ta-hint {
+  margin-left: auto;
+  font-size: 0.7rem;
+  color: var(--text-muted);
+  font-style: italic;
+}
+
+.ta-text {
+  font-size: 0.9375rem;
+  line-height: 1.85;
+  color: var(--text-primary);
+  padding: 1.25rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.ta-mark {
+  background: var(--mark-bg);
+  border-bottom: 2px solid var(--mark-color);
+  border-radius: 2px;
+  padding: 1px 2px;
+  cursor: pointer;
+  color: inherit;
+  transition: background 0.15s, filter 0.15s;
+  position: relative;
+}
+
+.ta-mark:hover {
+  filter: brightness(1.2);
+  background: var(--mark-bg);
+}
+
+.ta-mark.selected {
+  background: var(--mark-bg);
+  outline: 1.5px solid var(--mark-color);
+  outline-offset: 1px;
+}
+
+.ta-sup {
+  font-size: 0.55rem;
+  color: var(--mark-color);
+  margin-left: 1px;
+  vertical-align: super;
+  opacity: 0.8;
+}

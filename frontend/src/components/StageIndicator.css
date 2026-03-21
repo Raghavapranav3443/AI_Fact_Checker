@@ -1,0 +1,69 @@
+.stage-indicator {
+  display: flex;
+  align-items: center;
+  gap: 0;
+  padding: 1rem 1.5rem;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  overflow-x: auto;
+}
+
+.stage-step {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  flex-shrink: 0;
+  transition: var(--transition);
+}
+
+.step-dot {
+  width: 28px; height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  position: relative;
+  transition: var(--transition);
+}
+
+.stage-step.done .step-dot {
+  background: var(--true-bg);
+  border: 1.5px solid var(--true-border);
+}
+.stage-step.active .step-dot {
+  background: var(--accent-dim);
+  border: 1.5px solid var(--accent);
+}
+.stage-step.pending .step-dot {
+  background: var(--bg-elevated);
+  border: 1.5px solid var(--border);
+}
+
+.step-check  { font-size: 0.75rem; color: var(--true); }
+.step-num    { font-size: 0.7rem;  color: var(--text-muted); }
+
+.step-pulse {
+  width: 8px; height: 8px;
+  border-radius: 50%;
+  background: var(--accent);
+  animation: pulse-ring 1s ease-out infinite;
+}
+
+.step-labels { display: flex; flex-direction: column; gap: 1px; }
+.step-label  { font-size: 0.8rem; font-weight: 500; color: var(--text-secondary); transition: var(--transition); }
+.step-desc   { font-size: 0.7rem; color: var(--text-muted); font-family: var(--font-mono); }
+
+.stage-step.active .step-label { color: var(--accent); }
+.stage-step.done   .step-label { color: var(--true); }
+
+.stage-connector {
+  flex: 1;
+  min-width: 24px;
+  height: 1px;
+  background: var(--border);
+  margin: 0 0.75rem;
+  transition: background 0.4s;
+}
+.stage-connector.filled { background: var(--true); }
