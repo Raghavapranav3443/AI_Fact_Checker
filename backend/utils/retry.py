@@ -28,7 +28,9 @@ def retry_with_backoff(max_retries: int = 3, base_delay: float = 1.0):
                         await asyncio.sleep(delay)
                     else:
                         logger.error(f"{func.__name__} failed after {max_retries} attempts: {e}")
-            raise last_exception
+            if last_exception:
+                raise last_exception
+            raise Exception(f"{func.__name__} failed without an exception recorded")
         return wrapper
     return decorator
 
@@ -77,7 +79,30 @@ def parse_llm_json(raw: str, default: Any = None) -> Any:
     except json.JSONDecodeError:
         pass
 
-    logger.error(f"parse_llm_json: all attempts failed. Raw (first 300 chars): {raw[:300]}")
+    # New: Aggressive repair for truncated JSON objects
+    if cleaned.startswith('{') and not cleaned.endswith('}'):
+        # Try to backtrack to the last meaningful closing point
+        # This regex looks for a value followed by a comma or a key:value pair
+        # and tries to close the object there.
+        try:
+            # 1. Strip trailing dangling characters following a comma or colon
+            repaired = re.sub(r',[^,]*$', '', cleaned)
+            repaired = repaired.rstrip() # Remove trailing spaces
+            if not repaired.endswith('}'): 
+                repaired += '}'
+            return json.loads(repaired)
+        except Exception:
+            try:
+                # 2. Even more aggressive: find last quote followed by anything and strip it
+                repaired = re.sub(r'"[^"]*$', '', cleaned)
+                repaired = repaired.rstrip().rstrip(',') # Remove trailing comma if it exists after strip
+                if not repaired.endswith('}'):
+                    repaired += '}'
+                return json.loads(repaired)
+            except Exception:
+                pass
+
+    logger.debug(f"parse_llm_json: all attempts failed. Raw (first 300 chars): {raw[:300]}")
     return default
 
 

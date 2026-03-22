@@ -58,7 +58,7 @@ export default function InputPage() {
     <div className="input-page">
       {/* Header */}
       <header className="input-header">
-        <div className="logo-mark">
+        <div className="logo-mark" onClick={() => setPage('landing')} style={{ cursor: 'pointer' }}>
           <span className="logo-v">V</span>
           <span className="logo-text">ERITAS</span>
         </div>
@@ -80,7 +80,7 @@ export default function InputPage() {
               className={`mode-btn ${mode === 'url' ? 'active' : ''}`}
               onClick={() => { setMode('url'); setError('') }}
             >
-              <span className="mode-icon">⌁</span> Enter URL
+              <span className="mode-icon">⌁</span> Enter URL <span className="wip-badge mono" style={{ fontSize: '9px', verticalAlign: 'middle', marginLeft: '4px', opacity: 0.5 }}>(work in progress)</span>
             </button>
           </div>
 
@@ -118,7 +118,14 @@ export default function InputPage() {
                 />
                 {urlValid && <span className="url-check">✓</span>}
               </div>
-              <p className="url-hint">We'll scrape the article and extract images for deepfake detection</p>
+              <p className="url-hint">We'll scrape the article and extract images for deepfake detection.</p>
+              <div className="url-logic-pointer mono" style={{ fontSize: '11px', marginTop: '12px', color: 'var(--text-muted)', background: 'var(--bg-elevated)', padding: '12px', borderRadius: '8px', border: '1px solid var(--border)' }}>
+                <p style={{ marginBottom: '8px', color: 'var(--accent)' }}>Feel free to check out the backend logic :)</p>
+                <ul style={{ listStyle: 'none', padding: 0 }}>
+                  <li>→ <code>backend/agents/media_detector.py</code> (Deepfake Analysis)</li>
+                  <li>→ <code>backend/utils/scraper.py</code> (Image Extraction)</li>
+                </ul>
+              </div>
             </div>
           )}
 
