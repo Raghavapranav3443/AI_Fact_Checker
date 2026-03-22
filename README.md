@@ -124,18 +124,17 @@ Paste the text from `utils/demo_cache.py` → `DEMO_SCENARIOS` for the exact inp
 
 | Rubric Criterion | Points | How Veritas Addresses It |
 |---|---|---|
-| Claim Extraction accuracy | 40 | Groq Llama 3.3 with typed extraction, CoT, 12-claim cap |
-| Evidence Retrieval quality | 40 | Triple-query + Wikidata + Wikipedia + WorldBank + OpenFDA |
-| Verification Logic | 40 | Cross-model jury + strict grounding + self-reflection |
-| Explainability UI | 30 | Inline text annotation, collapsible reasoning chain, PDF export |
-| User Flow / streaming | 30 | SSE live updates: Extracting → Searching → Verifying |
-| Design quality | 30 | Dark precision-instrument aesthetic, Syne + JetBrains Mono |
-| Architecture robustness | 30 | Partial-result tolerance, retry/backoff, never fatal on single failure |
-| Handling ambiguity | 30 | CONTESTED verdicts, conflict panel, Unverifiable when no evidence |
-| Prompt engineering | 30 | Chain-of-Thought, strict grounding constraints, self-critique |
-| AI Text Detection | +10 | Perplexity + burstiness + n-gram, 0–100 probability score |
-| AI Media Detection | +20 | Hive API on all images extracted from URL |
-| **Total possible** | **130** | |
+| Claim Extraction accuracy | Groq Llama 3.3 with typed extraction, CoT, 12-claim cap |
+| Evidence Retrieval quality | Triple-query + Wikidata + Wikipedia + WorldBank + OpenFDA |
+| Verification Logic | Cross-model jury + strict grounding + self-reflection |
+| Explainability UI | Inline text annotation, collapsible reasoning chain, PDF export |
+| User Flow / streaming | SSE live updates: Extracting → Searching → Verifying |
+| Design quality | Dark precision-instrument aesthetic, Syne + JetBrains Mono |
+| Architecture robustness | Partial-result tolerance, retry/backoff, never fatal on single failure |
+| Handling ambiguity | CONTESTED verdicts, conflict panel, Unverifiable when no evidence |
+| Prompt engineering | Chain-of-Thought, strict grounding constraints, self-critique |
+| AI Text Detection | Perplexity + burstiness + n-gram, 0–100 probability score |
+| AI Media Detection | Hive API on all images extracted from URL |
 
 ---
 
