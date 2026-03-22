@@ -30,6 +30,12 @@
   align-items: baseline;
   gap: 0;
   margin-bottom: 0.4rem;
+  cursor: pointer;
+  transition: var(--transition);
+}
+
+.logo-mark:hover {
+  filter: brightness(1.2);
 }
 
 .logo-v {

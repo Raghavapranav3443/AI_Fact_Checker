@@ -12,11 +12,23 @@ from dotenv import load_dotenv
 
 load_dotenv()
 
+# ── Logging ───────────────────────────────────────────────────────────────────
+LOG_LEVEL = os.getenv("LOG_LEVEL", "INFO").upper()
 logging.basicConfig(
-    level=logging.INFO,
+    level=getattr(logging, LOG_LEVEL, logging.INFO),
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s",
 )
 logger = logging.getLogger(__name__)
+
+# Silence noisy third-party libraries
+logging.getLogger("httpx").setLevel(logging.WARNING)
+logging.getLogger("httpcore").setLevel(logging.WARNING)
+logging.getLogger("groq").setLevel(logging.WARNING)
+logging.getLogger("slowapi").setLevel(logging.WARNING)
+# If in production/silent mode, even our own loggers should be quiet
+if LOG_LEVEL in ("ERROR", "CRITICAL"):
+    logging.getLogger("uvicorn.access").setLevel(logging.WARNING)
+    logging.getLogger("uvicorn.error").setLevel(logging.ERROR)
 
 from api.routes import router
 

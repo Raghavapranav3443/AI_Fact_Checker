@@ -203,7 +203,7 @@ export default function LandingPage() {
           { num: 12, suffix: '', label: 'Claims per analysis' },
           { num: 3, suffix: 'x', label: 'Queries per claim' },
           { num: 2, suffix: '', label: 'Independent verifier models' },
-          { num: 130, suffix: 'pt', label: 'Maximum hackathon score' },
+          { num: 5, suffix: '', label: 'Intelligence stages' },
         ].map(({ num, suffix, label }) => (
           <div key={label} className="lp-stat">
             <div className="lp-stat-num display">
@@ -333,16 +333,14 @@ export default function LandingPage() {
               Four deterministic signals — sentence burstiness, length clustering,
               function-word density, and punctuation regularity — combine into a 0–100 AI origin probability score.
             </p>
-            <div className="lp-bonus-tag mono">+10 pts</div>
           </div>
           <div className="lp-bonus-card">
             <div className="lp-bonus-icon" style={{ color: 'var(--contested)' }}>⊝</div>
-            <h3 className="lp-bonus-title">Deepfake Detection</h3>
+            <h3 className="lp-bonus-title">Deepfake Detection <span className="wip-badge mono" style={{ fontSize: '10px', verticalAlign: 'middle', opacity: 0.6 }}>(work in progress)</span></h3>
             <p className="lp-bonus-desc">
               Images extracted from URL inputs are sent to the Hive AI API for deepfake
               and AI-generation analysis with per-image confidence scores.
             </p>
-            <div className="lp-bonus-tag mono">+20 pts</div>
           </div>
         </div>
       </section>

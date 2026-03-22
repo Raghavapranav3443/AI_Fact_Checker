@@ -59,7 +59,7 @@ async def _call_reflection(verdict: dict) -> dict:
         model="llama-3.1-8b-instant",
         messages=[{"role": "user", "content": prompt}],
         temperature=0.3,
-        max_tokens=200,
+        max_tokens=300,
     ))
     return parse_llm_json(response.choices[0].message.content, default={})
 
