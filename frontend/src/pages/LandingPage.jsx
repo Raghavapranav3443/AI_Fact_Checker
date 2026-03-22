@@ -1,342 +1,362 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { usePipelineContext } from '../context/PipelineContext';
-import './LandingPage.css';
+import React, { useEffect, useRef, useState } from 'react'
+import { usePipelineContext } from '../context/PipelineContext'
+import './LandingPage.css'
 
-/* ── content ── */
-const TECH_STACK = [
-  { id: 'frontend', label: 'frontend', title: 'React & Vite', desc: 'Crafting a blazing-fast, responsive UI tailored for seamless interaction and instant feedback.' },
-  { id: 'backend', label: 'backend', title: 'Python / Express', desc: 'Robust routing and secure data handling to orchestrate complex verification workflows.' },
-  { id: 'llm', label: 'llm_core', title: 'Google Gemini', desc: 'State-of-the-art agentic processing for precision claim extraction and logical verification.' },
-  { id: 'search', label: 'retrieval', title: 'Custom Search API', desc: 'Real-time, autonomous web integration traversing authoritative sources across the globe.' },
-];
-
-const FEATURES = [
-  { sig: 'F-01', icon: '[TGT]', title: 'Automated Fact Extraction', desc: 'Intelligently decomposes complex essays and lengthy articles into discrete, atomic, verifiable statements.' },
-  { sig: 'F-02', icon: '[NET]', title: 'Autonomous Retrieval', desc: 'Dynamically formulates multi-layered queries and cross-references live data from the web in real time.' },
-  { sig: 'F-03', icon: '[VRF]', title: 'Granular Accuracy', desc: 'Strict TRUE / FALSE / PARTIAL classification with explicit citations and logical reasoning chains.' },
-  { sig: 'F-04', icon: '[SHL]', title: 'Content Authenticity', desc: 'Detects AI-generated phrasing and synthetic media manipulation to ensure pure human integrity.' },
-];
-
-const PIPELINE_STEPS = [
-  { cmd: '$ veritas extract', label: 'EXTRACT', desc: 'Upload document or URL. Agent isolates core verifiable claims while preserving original context.' },
-  { cmd: '$ veritas search', label: 'SEARCH', desc: 'System queries real-world sources, retrieving relevant evidence and filtering out noise autonomously.' },
-  { cmd: '$ veritas verify', label: 'VERIFY', desc: 'Evidence meets claim. Engine produces a detailed report citing exactly why a claim holds true or fails.' },
-];
-
-/* ── Matrix rain canvas ── */
-function MatrixRain() {
-  const canvasRef = useRef(null);
+/* ── Animated trust score ring ── */
+function TrustRing({ score, color, label }) {
+  const R = 36, C = 44
+  const circ = 2 * Math.PI * R
+  const [filled, setFilled] = useState(0)
   useEffect(() => {
-    const canvas = canvasRef.current;
-    const ctx = canvas.getContext('2d');
-    let w = canvas.width = window.innerWidth;
-    let h = canvas.height = window.innerHeight;
-    const cols = Math.floor(w / 20);
-    const drops = Array(cols).fill(1);
-    const chars = '01アイウエオカキクケコサシスセソタチツテトナニヌネノABCDEFVERITAS<>{}[]|/\\';
-
-    function draw() {
-      ctx.fillStyle = 'rgba(0,0,0,0.05)';
-      ctx.fillRect(0, 0, w, h);
-      ctx.fillStyle = '#003B00';
-      ctx.font = '14px monospace';
-      drops.forEach((y, i) => {
-        const ch = chars[Math.floor(Math.random() * chars.length)];
-        ctx.fillStyle = Math.random() > 0.97 ? '#00FF41' : '#003B00';
-        ctx.fillText(ch, i * 20, y * 20);
-        if (y * 20 > h && Math.random() > 0.975) drops[i] = 0;
-        drops[i]++;
-      });
-    }
-    const id = setInterval(draw, 60);
-    const resize = () => {
-      w = canvas.width = window.innerWidth;
-      h = canvas.height = window.innerHeight;
-    };
-    window.addEventListener('resize', resize);
-    return () => { clearInterval(id); window.removeEventListener('resize', resize); };
-  }, []);
-  return <canvas ref={canvasRef} className="matrix-canvas" />;
-}
-
-/* ── typewriter hook ── */
-function useTypewriter(text, speed = 45, startDelay = 0) {
-  const [displayed, setDisplayed] = useState('');
-  const [done, setDone] = useState(false);
-  useEffect(() => {
-    setDisplayed('');
-    setDone(false);
-    let i = 0;
-    const start = setTimeout(() => {
-      const id = setInterval(() => {
-        i++;
-        setDisplayed(text.slice(0, i));
-        if (i >= text.length) { clearInterval(id); setDone(true); }
-      }, speed);
-      return () => clearInterval(id);
-    }, startDelay);
-    return () => clearTimeout(start);
-  }, [text, speed, startDelay]);
-  return [displayed, done];
-}
-
-/* ── glitch text ── */
-function GlitchText({ text, className = '' }) {
+    const t = setTimeout(() => setFilled((score / 100) * circ), 300)
+    return () => clearTimeout(t)
+  }, [score, circ])
   return (
-    <span className={`glitch ${className}`} data-text={text}>
-      {text}
-    </span>
-  );
-}
-
-/* ── terminal window wrapper ── */
-function TermWindow({ title, children, className = '', style }) {
-  return (
-    <div className={`term-window ${className}`} style={style}>
-      <div className="term-titlebar">
-        <span className="term-dot term-dot--red" />
-        <span className="term-dot term-dot--yellow" />
-        <span className="term-dot term-dot--green" />
-        <span className="term-title">{title}</span>
-      </div>
-      <div className="term-body">{children}</div>
+    <div className="demo-ring">
+      <svg width="88" height="88" viewBox="0 0 88 88">
+        <circle cx={C} cy={C} r={R} fill="none" stroke="var(--bg-elevated)" strokeWidth="5" />
+        <circle cx={C} cy={C} r={R} fill="none" stroke={color} strokeWidth="5"
+          strokeLinecap="round"
+          strokeDasharray={`${filled} ${circ}`}
+          transform={`rotate(-90 ${C} ${C})`}
+          style={{ transition: 'stroke-dasharray 1.2s ease' }}
+        />
+        <text x={C} y={C - 4} textAnchor="middle" dominantBaseline="middle"
+          style={{ fontFamily: 'var(--font-display)', fontSize: '16px', fontWeight: 700, fill: color }}>
+          {score}
+        </text>
+        <text x={C} y={C + 12} textAnchor="middle"
+          style={{ fontFamily: 'var(--font-mono)', fontSize: '6px', fill: 'var(--text-muted)', letterSpacing: '0.5px' }}>
+          / 100
+        </text>
+      </svg>
+      <span className="demo-ring-label" style={{ color }}>{label}</span>
     </div>
-  );
+  )
 }
 
-/* ── scroll reveal hook ── */
-function useReveal(threshold = 0.12) {
-  const ref = useRef(null);
-  const [vis, setVis] = useState(false);
+/* ── Scroll reveal hook ── */
+function useReveal(threshold = 0.1) {
+  const ref = useRef(null)
+  const [vis, setVis] = useState(false)
   useEffect(() => {
     const obs = new IntersectionObserver(
-      ([e]) => { if (e.isIntersecting) { setVis(true); obs.disconnect(); } },
+      ([e]) => { if (e.isIntersecting) { setVis(true); obs.disconnect() } },
       { threshold }
-    );
-    if (ref.current) obs.observe(ref.current);
-    return () => obs.disconnect();
-  }, []);
-  return [ref, vis];
+    )
+    if (ref.current) obs.observe(ref.current)
+    return () => obs.disconnect()
+  }, [])
+  return [ref, vis]
 }
 
-/* ════════════════════════════════════════════════════════════
-   MAIN COMPONENT
-   ════════════════════════════════════════════════════════════ */
-export default function LandingPage() {
-  const { setPage } = usePipelineContext();
-  const [activeTab, setActiveTab] = useState(0);
-  const [bootLine, bootDone] = useTypewriter('INITIALIZING VERITAS v2.4.1 ...', 35, 200);
-  const [statusLine,] = useTypewriter('> SYSTEM READY. ALL MODULES ONLINE.', 30, 1800);
-  const [techRef, techVis] = useReveal();
-  const [featRef, featVis] = useReveal();
-  const [pipeRef, pipeVis] = useReveal();
-
+/* ── Animated counter ── */
+function Counter({ to, suffix = '' }) {
+  const [val, setVal] = useState(0)
+  const ref = useRef(null)
   useEffect(() => {
-    const id = setInterval(() => setActiveTab(p => (p + 1) % TECH_STACK.length), 4000);
-    return () => clearInterval(id);
-  }, []);
+    const obs = new IntersectionObserver(([e]) => {
+      if (!e.isIntersecting) return
+      obs.disconnect()
+      let start = 0
+      const step = to / 60
+      const id = setInterval(() => {
+        start = Math.min(start + step, to)
+        setVal(Math.round(start))
+        if (start >= to) clearInterval(id)
+      }, 16)
+    }, { threshold: 0.5 })
+    if (ref.current) obs.observe(ref.current)
+    return () => obs.disconnect()
+  }, [to])
+  return <span ref={ref}>{val}{suffix}</span>
+}
+
+const PIPELINE_STEPS = [
+  {
+    num: '01',
+    title: 'Input Classification',
+    sub: 'Llama 3.1 8B fuse',
+    desc: 'A lightweight model gates every submission — classifying input as Factual, Opinion, or Off-Topic before a single API call is made downstream.',
+    color: 'var(--accent)',
+    icon: '⊛',
+  },
+  {
+    num: '02',
+    title: 'Atomic Claim Extraction',
+    sub: 'Llama 3.3 70B',
+    desc: 'Complex text is decomposed into discrete, typed, verifiable statements — Temporal, Statistical, Entity-State, or Historical-Fact — with source sentence preserved.',
+    color: 'var(--true)',
+    icon: '⊚',
+  },
+  {
+    num: '03',
+    title: 'Triple-Query Retrieval',
+    sub: 'Tavily + 4 Knowledge APIs',
+    desc: 'Each claim generates three search queries: Direct, Adversarial, and Contextual. Evidence is cross-referenced from Tavily, Wikidata, Wikipedia, WorldBank, and OpenFDA in parallel.',
+    color: 'var(--partial)',
+    icon: '⊝',
+  },
+  {
+    num: '04',
+    title: 'Dual-Model Jury',
+    sub: 'Llama 3.3 70B × Llama 3.1 8B',
+    desc: 'Two independent models verify each claim against evidence exclusively — training knowledge is inadmissible. Disagreement triggers a CONTESTED verdict and re-search.',
+    color: 'var(--contested)',
+    icon: '⊞',
+  },
+  {
+    num: '05',
+    title: 'Self-Reflection & Conflicts',
+    sub: 'Reflector + Conflict Detector',
+    desc: 'A critic model challenges every verdict. If critique strength exceeds 60, re-search is triggered. Source contradictions are surfaced as a side-by-side conflict panel.',
+    color: 'var(--false)',
+    icon: '⊟',
+  },
+]
+
+const VERDICT_EXAMPLES = [
+  { verdict: 'TRUE', color: 'var(--true)', bg: 'var(--true-bg)', border: 'var(--true-border)', symbol: '✓', claim: 'The WHO was established on April 7, 1948.' },
+  { verdict: 'FALSE', color: 'var(--false)', bg: 'var(--false-bg)', border: 'var(--false-border)', symbol: '✗', claim: 'AlphaGo won all five matches against Lee Sedol.' },
+  { verdict: 'PARTIALLY TRUE', color: 'var(--partial)', bg: 'var(--partial-bg)', border: 'var(--partial-border)', symbol: '◑', claim: 'OpenAI was founded in 2015 as a non-profit.' },
+  { verdict: 'CONTESTED', color: 'var(--contested)', bg: 'var(--contested-bg)', border: 'var(--contested-border)', symbol: '⚡', claim: "China's 2023 GDP growth was 5.2 percent." },
+  { verdict: 'UNVERIFIABLE', color: 'var(--unverifiable)', bg: 'var(--unverifiable-bg)', border: 'var(--unverifiable-border)', symbol: '?', claim: 'The company employs approximately 8,000 people.' },
+]
+
+export default function LandingPage() {
+  const { setPage } = usePipelineContext()
+  const [heroRef, heroVis] = useReveal(0.01)
+  const [pipeRef, pipeVis] = useReveal(0.05)
+  const [demoRef, demoVis] = useReveal(0.05)
+  const [statsRef, statsVis] = useReveal(0.2)
 
   return (
-    <div className="lp-root">
-      {/* scanline overlay */}
-      <div className="scanlines" aria-hidden="true" />
+    <div className="lp">
 
-      {/* ── HERO ──────────────────────────────────────────── */}
-      <section className="lp-hero">
-        <MatrixRain />
+      {/* ── NAV ── */}
+      <nav className="lp-nav">
+        <div className="lp-nav-logo">
+          <span className="lp-nav-v">V</span><span className="lp-nav-rest">ERITAS</span>
+        </div>
+        <button className="lp-nav-cta" onClick={() => setPage('input')}>
+          Start Analysing →
+        </button>
+      </nav>
 
-        <div className="lp-hero__content">
-          {/* boot sequence */}
-          <div className="boot-seq">
-            <span className="boot-line">{bootLine}{!bootDone && <span className="cursor">█</span>}</span>
-            {bootDone && <span className="boot-status">{statusLine}<span className="cursor">█</span></span>}
+      {/* ── HERO ── */}
+      <section className="lp-hero" ref={heroRef}>
+        <div className="lp-hero-bg">
+          <div className="lp-orb lp-orb-1" />
+          <div className="lp-orb lp-orb-2" />
+          <div className="lp-grid-lines" aria-hidden="true" />
+        </div>
+
+        <div className={`lp-hero-content ${heroVis ? 'is-visible' : ''}`}>
+          <div className="lp-hero-badge mono">
+            <span className="lp-hero-badge-dot" /> AI-Powered Fact Verification
           </div>
 
-          {/* ASCII banner */}
-          <pre className="ascii-banner" aria-label="VERITAS">
-            {`
- ██╗   ██╗███████╗██████╗ ██╗████████╗ █████╗ ███████╗
- ██║   ██║██╔════╝██╔══██╗██║╚══██╔══╝██╔══██╗██╔════╝
- ██║   ██║█████╗  ██████╔╝██║   ██║   ███████║███████╗
- ╚██╗ ██╔╝██╔══╝  ██╔══██╗██║   ██║   ██╔══██║╚════██║
-  ╚████╔╝ ███████╗██║  ██║██║   ██║   ██║  ██║███████║
-   ╚═══╝  ╚══════╝╚═╝  ╚═╝╚═╝   ╚═╝   ╚═╝  ╚═╝╚══════╝`}
-          </pre>
+          <h1 className="lp-hero-title display">
+            Every claim.<br />
+            <span className="lp-hero-title-accent">Verified.</span>
+          </h1>
 
-          <p className="hero-tagline">
-            <span className="prompt-sym">&gt;&gt;</span>
-            &nbsp;FACT &amp; CLAIM VERIFICATION SYSTEM&nbsp;
-            <span className="prompt-sym">&lt;&lt;</span>
+          <p className="lp-hero-sub">
+            Veritas decomposes articles into atomic facts, retrieves real-world evidence
+            from authoritative sources, and cross-validates with a dual-model jury —
+            delivering a granular accuracy report with citations and confidence scores.
           </p>
 
-          <div className="hero-desc-block">
-            <span className="line-num">01</span>
-            <p className="hero-desc">
-              In an era of AI hallucinations and rampant misinformation — secure your
-              digital content with an agentic verification engine. Real-world cross-referencing.
-              Automated claim extraction. Undeniable accuracy.
-            </p>
-          </div>
-
-          <div className="hero-actions">
-            <button className="hack-btn hack-btn--primary" onClick={() => setPage('input')}>
-              <span className="hack-btn__prefix">root@veritas:~$</span>
-              <span className="hack-btn__cmd">./launch --now</span>
+          <div className="lp-hero-actions">
+            <button className="lp-btn-primary" onClick={() => setPage('input')}>
+              Analyse an article
             </button>
-            <a href="#pipeline" className="hack-btn hack-btn--ghost">
-              <span className="hack-btn__prefix">$</span>
-              <span className="hack-btn__cmd">cat HOW_IT_WORKS.md</span>
+            <a href="#how-it-works" className="lp-btn-ghost">
+              See how it works ↓
             </a>
           </div>
 
-          {/* status bar */}
-          <div className="status-bar">
-            <span className="status-item"><span className="status-dot status-dot--ok" />SYS_STATUS: ONLINE</span>
-            <span className="status-sep">|</span>
-            <span className="status-item">MODULES: 4/4 LOADED</span>
-            <span className="status-sep">|</span>
-            <span className="status-item">INTEGRITY: 100%</span>
-            <span className="status-sep">|</span>
-            <span className="status-item"><span className="status-dot status-dot--ok" />UPTIME: 99.97%</span>
+          {/* Live verdict preview */}
+          <div className="lp-hero-preview">
+            {VERDICT_EXAMPLES.map((v, i) => (
+              <div
+                key={v.verdict}
+                className="lp-preview-chip"
+                style={{
+                  background: v.bg,
+                  border: `1px solid ${v.border}`,
+                  animationDelay: `${i * 0.1}s`,
+                }}
+              >
+                <span className="lp-preview-symbol mono" style={{ color: v.color }}>{v.symbol}</span>
+                <span className="lp-preview-text">{v.claim}</span>
+                <span className="lp-preview-verdict mono" style={{ color: v.color }}>{v.verdict}</span>
+              </div>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* ── TECH STACK ────────────────────────────────────── */}
-      <section className="lp-tech" ref={techRef}>
-        <div className={`lp-tech__inner ${techVis ? 'is-visible' : ''}`}>
-          <div className="section-label">
-            <span className="section-label__line" />&nbsp;
-            cat /etc/veritas/stack.conf
-            &nbsp;<span className="section-label__line" />
+      {/* ── STATS ── */}
+      <section className="lp-stats" ref={statsRef}>
+        {[
+          { num: 12, suffix: '', label: 'Claims per analysis' },
+          { num: 3, suffix: 'x', label: 'Queries per claim' },
+          { num: 2, suffix: '', label: 'Independent verifier models' },
+          { num: 130, suffix: 'pt', label: 'Maximum hackathon score' },
+        ].map(({ num, suffix, label }) => (
+          <div key={label} className="lp-stat">
+            <div className="lp-stat-num display">
+              {statsVis ? <Counter to={num} suffix={suffix} /> : `0${suffix}`}
+            </div>
+            <div className="lp-stat-label">{label}</div>
           </div>
+        ))}
+      </section>
 
-          <TermWindow title="stack.conf — architecture overview" className="tech-term">
-            {/* sidebar index */}
-            <div className="tech-layout">
-              <div className="tech-index">
-                {TECH_STACK.map((t, i) => (
-                  <button
-                    key={t.id}
-                    className={`tech-index__item ${activeTab === i ? 'is-active' : ''}`}
-                    onClick={() => setActiveTab(i)}
-                  >
-                    <span className="tech-index__num">[{String(i).padStart(2, '0')}]</span>
-                    <span className="tech-index__lbl">{t.label}</span>
-                    {activeTab === i && <span className="tech-index__arrow"> ▶</span>}
-                  </button>
-                ))}
+      {/* ── PIPELINE ── */}
+      <section className="lp-pipeline" id="how-it-works" ref={pipeRef}>
+        <div className="lp-section-head">
+          <span className="lp-eyebrow mono">The Pipeline</span>
+          <h2 className="lp-section-title display">Five stages.<br />Zero hallucinations.</h2>
+          <p className="lp-section-sub">
+            Every submission passes through a strict sequential pipeline.
+            No stage trusts the previous one blindly.
+          </p>
+        </div>
+
+        <div className={`lp-steps ${pipeVis ? 'is-visible' : ''}`}>
+          {PIPELINE_STEPS.map((step, i) => (
+            <div
+              key={step.num}
+              className="lp-step"
+              style={{ '--delay': `${i * 0.1}s` }}
+            >
+              <div className="lp-step-left">
+                <div className="lp-step-icon" style={{ color: step.color, background: `${step.color}18`, border: `1px solid ${step.color}33` }}>
+                  {step.icon}
+                </div>
+                {i < PIPELINE_STEPS.length - 1 && <div className="lp-step-line" />}
               </div>
-
-              <div className="tech-detail" key={activeTab}>
-                <div className="tech-detail__path">
-                  /modules/{TECH_STACK[activeTab].label}/config.json
+              <div className="lp-step-body">
+                <div className="lp-step-meta">
+                  <span className="lp-step-num mono" style={{ color: step.color }}>{step.num}</span>
+                  <span className="lp-step-sub mono">{step.sub}</span>
                 </div>
-                <div className="tech-detail__block">
-                  <span className="json-key">"module"</span>
-                  <span className="json-colon">: </span>
-                  <span className="json-str">"{TECH_STACK[activeTab].title}"</span>
-                  <span className="json-comma">,</span>
-                </div>
-                <div className="tech-detail__block">
-                  <span className="json-key">"status"</span>
-                  <span className="json-colon">: </span>
-                  <span className="json-ok">"ACTIVE"</span>
-                  <span className="json-comma">,</span>
-                </div>
-                <div className="tech-detail__block">
-                  <span className="json-key">"description"</span>
-                  <span className="json-colon">: </span>
-                  <span className="json-val">"{TECH_STACK[activeTab].desc}"</span>
-                </div>
-                <div className="tech-detail__progress">
-                  <span className="progress-lbl">LOADING&nbsp;</span>
-                  <span className="progress-bar"><span className="progress-fill" /></span>
-                  <span className="progress-pct"> 100%</span>
-                </div>
+                <h3 className="lp-step-title">{step.title}</h3>
+                <p className="lp-step-desc">{step.desc}</p>
               </div>
             </div>
-          </TermWindow>
-        </div>
-      </section>
-
-      {/* ── FEATURES ──────────────────────────────────────── */}
-      <section className="lp-feats" ref={featRef}>
-        <div className="section-label">
-          <span className="section-label__line" />&nbsp;
-          ls -la /capabilities/
-          &nbsp;<span className="section-label__line" />
-        </div>
-
-        <div className={`feats-grid ${featVis ? 'is-visible' : ''}`}>
-          {FEATURES.map((f, i) => (
-            <TermWindow
-              key={i}
-              title={`${f.sig} :: ${f.title.toLowerCase().replace(/ /g, '_')}.exe`}
-              className="feat-card"
-              style={{ '--delay': `${i * 0.12}s` }}
-            >
-              <div className="feat-sig">{f.icon}</div>
-              <div className="feat-cmd">&gt; exec <span className="feat-name">{f.title}</span></div>
-              <div className="feat-output">{f.desc}</div>
-              <div className="feat-status">EXIT_CODE: <span className="feat-ok">0x00 OK</span></div>
-            </TermWindow>
           ))}
         </div>
       </section>
 
-      {/* ── PIPELINE ──────────────────────────────────────── */}
-      <section className="lp-pipeline" id="pipeline" ref={pipeRef}>
-        <div className="section-label">
-          <span className="section-label__line" />&nbsp;
-          ./veritas --help pipeline
-          &nbsp;<span className="section-label__line" />
+      {/* ── DEMO OUTCOMES ── */}
+      <section className="lp-demo" ref={demoRef}>
+        <div className="lp-section-head">
+          <span className="lp-eyebrow mono">What you get</span>
+          <h2 className="lp-section-title display">Three demo scenarios.<br />Three different truths.</h2>
         </div>
 
-        <TermWindow title="veritas — pipeline execution trace" className="pipeline-term">
-          <div className={`pipeline-steps ${pipeVis ? 'is-visible' : ''}`}>
-            {PIPELINE_STEPS.map((s, i) => (
-              <div
-                className="pipe-step"
-                key={i}
-                style={{ '--delay': `${i * 0.2}s` }}
-              >
-                <div className="pipe-step__header">
-                  <span className="pipe-step__idx">STEP {i + 1}/{PIPELINE_STEPS.length}</span>
-                  <span className="pipe-step__sep"> ───────── </span>
-                  <span className="pipe-step__status">[DONE]</span>
+        <div className={`lp-demo-cards ${demoVis ? 'is-visible' : ''}`}>
+          {[
+            {
+              label: 'Mostly True',
+              title: 'Well-sourced article',
+              desc: 'WHO founding facts. High authority sources, recent citations, both models agree.',
+              score: 82,
+              color: 'var(--true)',
+              verdicts: [8, 1, 0, 1, 0],
+              delay: '0s',
+            },
+            {
+              label: 'Mixed Accuracy',
+              title: 'AI industry blog',
+              desc: 'Claims about OpenAI, Google DeepMind, and Nvidia — some accurate, some not.',
+              score: 51,
+              color: 'var(--partial)',
+              verdicts: [3, 3, 2, 1, 1],
+              delay: '0.1s',
+            },
+            {
+              label: 'Conflicting Sources',
+              title: 'Economic claims',
+              desc: 'IMF vs World Bank figures. CONTESTED verdicts, conflict panel populated.',
+              score: 34,
+              color: 'var(--contested)',
+              verdicts: [2, 1, 2, 3, 2],
+              delay: '0.2s',
+            },
+          ].map(({ label, title, desc, score, color, verdicts, delay }) => (
+            <div key={title} className="lp-demo-card" style={{ '--delay': delay }}>
+              <div className="lp-demo-card-top">
+                <TrustRing score={score} color={color} label={label} />
+                <div className="lp-demo-card-info">
+                  <div className="lp-demo-card-title">{title}</div>
+                  <p className="lp-demo-card-desc">{desc}</p>
                 </div>
-                <div className="pipe-step__cmd">{s.cmd}</div>
-                <div className="pipe-step__label">// {s.label}</div>
-                <div className="pipe-step__desc">{s.desc}</div>
-                {i < PIPELINE_STEPS.length - 1 && (
-                  <div className="pipe-step__connector">
-                    &nbsp;&nbsp;│<br />
-                    &nbsp;&nbsp;▼
-                  </div>
-                )}
               </div>
-            ))}
-          </div>
-        </TermWindow>
+              <div className="lp-demo-verdict-bars">
+                {['TRUE', 'FALSE', 'PARTIAL', 'CONTESTED', 'UNVERIFIABLE'].map((v, i) => (
+                  <div key={v} className="lp-demo-bar-row">
+                    <span className="lp-demo-bar-label mono">{v.slice(0, 4)}</span>
+                    <div className="lp-demo-bar-track">
+                      <div
+                        className="lp-demo-bar-fill"
+                        style={{
+                          width: demoVis ? `${(verdicts[i] / 10) * 100}%` : '0%',
+                          background: ['var(--true)', 'var(--false)', 'var(--partial)', 'var(--contested)', 'var(--unverifiable)'][i],
+                          transitionDelay: `${0.3 + i * 0.08}s`,
+                        }}
+                      />
+                    </div>
+                    <span className="lp-demo-bar-count mono">{verdicts[i]}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          ))}
+        </div>
       </section>
 
-      {/* ── FOOTER ────────────────────────────────────────── */}
-      <footer className="lp-footer">
-        <div className="footer-ascii">
-          <pre>{`╔═══════════════════════════════════════════════════════════╗
-║            READY TO ELIMINATE UNCERTAINTY?                ║
-║          ACCESS GRANTED. AWAITING YOUR COMMAND.           ║
-╚═══════════════════════════════════════════════════════════╝`}</pre>
+      {/* ── BONUS FEATURES ── */}
+      <section className="lp-bonus">
+        <div className="lp-section-head">
+          <span className="lp-eyebrow mono">Bonus Capabilities</span>
+          <h2 className="lp-section-title display">Beyond fact-checking.</h2>
         </div>
-        <button className="hack-btn hack-btn--primary hack-btn--lg" onClick={() => setPage('input')}>
-          <span className="hack-btn__prefix">root@veritas:~$</span>
-          <span className="hack-btn__cmd">./veritas --launch</span>
+        <div className="lp-bonus-grid">
+          <div className="lp-bonus-card">
+            <div className="lp-bonus-icon" style={{ color: 'var(--accent)' }}>⊛</div>
+            <h3 className="lp-bonus-title">AI Text Detection</h3>
+            <p className="lp-bonus-desc">
+              Four deterministic signals — sentence burstiness, length clustering,
+              function-word density, and punctuation regularity — combine into a 0–100 AI origin probability score.
+            </p>
+            <div className="lp-bonus-tag mono">+10 pts</div>
+          </div>
+          <div className="lp-bonus-card">
+            <div className="lp-bonus-icon" style={{ color: 'var(--contested)' }}>⊝</div>
+            <h3 className="lp-bonus-title">Deepfake Detection</h3>
+            <p className="lp-bonus-desc">
+              Images extracted from URL inputs are sent to the Hive AI API for deepfake
+              and AI-generation analysis with per-image confidence scores.
+            </p>
+            <div className="lp-bonus-tag mono">+20 pts</div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── CTA ── */}
+      <section className="lp-cta">
+        <div className="lp-cta-glow" />
+        <h2 className="lp-cta-title display">Ready to verify?</h2>
+        <p className="lp-cta-sub">Paste text or drop a URL. Results in under 60 seconds.</p>
+        <button className="lp-btn-primary lp-btn-lg" onClick={() => setPage('input')}>
+          Start Analysing →
         </button>
-        <p className="footer-copy">
-          <span className="prompt-sym">$</span> echo "VERITAS © 2024 — ALL CLAIMS VERIFIED. ALL RIGHTS RESERVED."
-        </p>
-      </footer>
+      </section>
+
     </div>
-  );
+  )
 }

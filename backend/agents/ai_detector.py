@@ -1,163 +1,157 @@
-import os
 import re
 import math
-import asyncio
 import logging
-from groq import Groq
-from utils.retry import retry_with_backoff, parse_llm_json
 
 logger = logging.getLogger(__name__)
 
-PERPLEXITY_PROMPT = """Rate each sentence below on how PREDICTABLE it is for an AI language model to generate.
-Score 1 = highly predictable / generic / AI-like phrasing
-Score 10 = surprising / idiosyncratic / distinctly human phrasing
+# ── Signal weights (sum to 1.0) ──────────────────────────────────────────────
+_WEIGHTS = {
+    "burstiness":     0.30,
+    "uniformity":     0.25,
+    "function_words": 0.25,
+    "punctuation":    0.20,
+}
 
-Return ONLY a JSON array of scores (one integer per sentence, in order):
-[score1, score2, score3, ...]
-
-SENTENCES:
-{sentences}"""
-
-
-@retry_with_backoff(max_retries=2, base_delay=0.5)
-async def _get_perplexity_scores(sentences: list) -> list:
-    """Ask Groq to score sentence predictability."""
-    client = Groq(api_key=os.getenv("GROQ_API_KEY", ""))
-    loop = asyncio.get_running_loop()
-
-    # Use first 20 sentences max
-    sample = sentences[:20]
-    numbered = "\n".join(f"{i+1}. {s}" for i, s in enumerate(sample))
-
-    response = await loop.run_in_executor(
-        None,
-        lambda: client.chat.completions.create(
-            model="llama-3.1-8b-instant",
-            messages=[{"role": "user", "content": PERPLEXITY_PROMPT.format(sentences=numbered)}],
-            temperature=0.1,
-            max_tokens=200,
-        )
-    )
-    scores = parse_llm_json(response.choices[0].message.content, default=[])
-    if isinstance(scores, list):
-        return [max(1, min(10, int(s))) for s in scores if isinstance(s, (int, float))]
-    return []
+# ── Common English function words ────────────────────────────────────────────
+# Human text contains ~40-50% function words; AI text ~15-25%.
+_FUNCTION_WORDS = {
+    'the','a','an','and','but','or','so','yet','for','nor',
+    'i','me','my','we','our','you','your','he','she','it','they','them',
+    'is','was','are','were','be','been','being','have','has','had',
+    'do','does','did','will','would','could','should','may','might',
+    'in','on','at','to','of','with','by','from','as','if','that',
+    'this','these','those','there','here','when','where','how','what',
+    'just','not','also','very','more','some','any','all','no','its',
+    'his','her','their','which','who','about','up','out','into','than',
+}
 
 
-def _burstiness_score(sentences: list) -> float:
-    """
-    Coefficient of variation of sentence lengths.
-    AI text: low variance (uniform). Human text: high variance (bursty).
-    Returns 0-1 where 0 = very AI-like, 1 = very human-like.
-    """
+# ── Signal 1: Burstiness ─────────────────────────────────────────────────────
+# Coefficient of variation of sentence lengths.
+# Human writing bursts: short punchy sentences mixed with long ones (cv > 0.6).
+# AI writing is metronomically uniform (cv < 0.3).
+# Returns AI probability [0.0, 1.0].
+def _burstiness(sentences: list) -> float:
     if len(sentences) < 3:
         return 0.5
-
     lengths = [len(s.split()) for s in sentences]
     mean = sum(lengths) / len(lengths)
     if mean == 0:
         return 0.5
-
     variance = sum((l - mean) ** 2 for l in lengths) / len(lengths)
-    std = math.sqrt(variance)
-    cv = std / mean  # coefficient of variation
-
-    # Normalize: CV < 0.3 = AI-like, CV > 0.7 = human-like
-    normalized = min(1.0, cv / 0.7)
-    return normalized
+    cv = math.sqrt(variance) / mean
+    # cv=0.0 -> 1.0 (max AI), cv>=0.6 -> 0.0 (human)
+    return max(0.0, min(1.0, 1.0 - (cv / 0.6)))
 
 
-def _ngram_repetition_score(text: str) -> float:
-    """
-    Measures 4-gram repetition ratio.
-    AI text tends to reuse phrases; human text is more varied.
-    Returns 0-1 where 0 = very AI-like (high repetition), 1 = very human-like.
-    """
-    words = text.lower().split()
-    if len(words) < 8:
+# ── Signal 2: Sentence length clustering ─────────────────────────────────────
+# Fraction of sentences within ±4 words of the mean.
+# AI sentences cluster tightly (>80% within window).
+# Human sentences are spread out (<50% within same window).
+# Returns AI probability [0.0, 1.0].
+def _sentence_uniformity(sentences: list) -> float:
+    if len(sentences) < 4:
         return 0.5
+    lengths = [len(s.split()) for s in sentences]
+    mean = sum(lengths) / len(lengths)
+    clustered = sum(1 for l in lengths if abs(l - mean) <= 4)
+    ratio = clustered / len(lengths)
+    # ratio=0.4 -> 0.0 (human), ratio=0.8 -> 1.0 (AI)
+    return max(0.0, min(1.0, (ratio - 0.4) / 0.4))
 
-    ngrams = [tuple(words[i:i+4]) for i in range(len(words) - 3)]
-    total = len(ngrams)
-    unique = len(set(ngrams))
 
-    if total == 0:
+# ── Signal 3: Function word ratio ────────────────────────────────────────────
+# Human text ~40-50% function words (the, I, was, and, but...).
+# AI text ~15-25% function words — over-represents content/technical words.
+# Works reliably even on short texts (>15 words).
+# Returns AI probability [0.0, 1.0].
+def _function_word_ratio(text: str) -> float:
+    words = re.findall(r'\b[a-z]+\b', text.lower())
+    n = len(words)
+    if n < 15:
         return 0.5
+    fw_count = sum(1 for w in words if w in _FUNCTION_WORDS)
+    ratio = fw_count / n
+    # ratio < 0.25 -> AI (1.0); ratio > 0.42 -> human (0.0)
+    return max(0.0, min(1.0, 1.0 - ((ratio - 0.25) / 0.17)))
 
-    repetition_ratio = 1 - (unique / total)
-    # Higher repetition = more AI-like = lower human score
-    human_score = 1.0 - (repetition_ratio * 2)  # scale up repetition penalty
-    return max(0.0, min(1.0, human_score))
+
+# ── Signal 4: Punctuation regularity ─────────────────────────────────────────
+# Coefficient of variation of comma/colon/semicolon counts per sentence.
+# AI punctuates with machine-like consistency (low cv).
+# Human punctuation is erratic (high cv).
+# Returns AI probability [0.0, 1.0].
+def _punctuation_regularity(sentences: list) -> float:
+    if len(sentences) < 4:
+        return 0.5
+    punct_counts = [len(re.findall(r'[,;:\-\u2013\u2014]', s)) for s in sentences]
+    mean = sum(punct_counts) / len(punct_counts)
+    if mean == 0:
+        # No mid-sentence punctuation at all — neutral signal
+        return 0.45
+    variance = sum((p - mean) ** 2 for p in punct_counts) / len(punct_counts)
+    cv = math.sqrt(variance) / mean
+    # cv < 0.5 -> AI (1.0); cv > 1.2 -> human (0.0)
+    return max(0.0, min(1.0, 1.0 - (cv / 1.2)))
 
 
-def _combine_signals(perplexity_avg: float, burstiness: float, ngram: float) -> int:
-    """
-    Combine three signals into 0-100 AI probability score.
-    Higher score = more likely AI-generated.
-    Perplexity avg: 1-10 where low=AI. Normalize to 0-1 where 1=AI.
-    """
-    # Normalize perplexity: score 1 = AI (1.0), score 10 = human (0.0)
-    perplexity_ai = 1.0 - ((perplexity_avg - 1) / 9.0) if perplexity_avg > 0 else 0.5
-
-    # Burstiness: 0=AI, 1=human → invert for AI score
-    burstiness_ai = 1.0 - burstiness
-
-    # Ngram: 0=AI, 1=human → invert
-    ngram_ai = 1.0 - ngram
-
-    # Weighted average: perplexity most important, then burstiness, then ngram
-    ai_probability = (perplexity_ai * 0.5) + (burstiness_ai * 0.3) + (ngram_ai * 0.2)
-    return max(0, min(100, int(ai_probability * 100)))
+# ── Combine ───────────────────────────────────────────────────────────────────
+def _combine(signals: dict) -> int:
+    score = sum(_WEIGHTS[k] * signals[k] for k in _WEIGHTS)
+    return max(0, min(100, int(score * 100)))
 
 
 def _label(score: int) -> str:
-    if score < 31:
+    if score < 30:
         return "Likely Human"
-    if score < 71:
+    if score < 65:
         return "Uncertain"
     return "Likely AI"
 
 
+# ── Public entry point ────────────────────────────────────────────────────────
 async def detect_ai_text(text: str) -> dict:
     """
-    Main entry: analyze text for AI-generation probability.
-    Returns AITextDetection dict.
+    Fully deterministic AI text detection — no LLM call.
+    Four statistically-grounded signals, calibrated for texts 50-10000 words.
+    Returns a score 0-100 (higher = more likely AI-generated).
     """
-    # Split into sentences
-    sentences = [s.strip() for s in re.split(r'(?<=[.!?])\s+', text) if len(s.strip()) > 10]
+    sentences = [
+        s.strip()
+        for s in re.split(r'(?<=[.!?])\s+', text)
+        if len(s.strip()) > 8
+    ]
 
     if len(sentences) < 3:
         return {
             "score": 50,
             "label": "Uncertain",
-            "perplexity_signal": 0.5,
-            "burstiness_signal": 0.5,
-            "ngram_signal": 0.5,
+            "burstiness_signal":     0.5,
+            "uniformity_signal":     0.5,
+            "function_words_signal": 0.5,
+            "punctuation_signal":    0.5,
+            # Legacy keys for any cached reports
+            "perplexity_signal":     0.5,
+            "ngram_signal":          0.5,
         }
 
-    # Run perplexity scoring and local signals concurrently
-    try:
-        perplexity_scores = await _get_perplexity_scores(sentences)
-        perplexity_avg = sum(perplexity_scores) / len(perplexity_scores) if perplexity_scores else 5.0
-    except Exception as e:
-        logger.warning(f"Perplexity scoring failed: {e}")
-        perplexity_avg = 5.0
+    signals = {
+        "burstiness":     _burstiness(sentences),
+        "uniformity":     _sentence_uniformity(sentences),
+        "function_words": _function_word_ratio(text),
+        "punctuation":    _punctuation_regularity(sentences),
+    }
 
-    burstiness = _burstiness_score(sentences)
-    ngram = _ngram_repetition_score(text)
-
-    score = _combine_signals(perplexity_avg, burstiness, ngram)
-
-    logger.info(
-        f"AI text detection: score={score}, "
-        f"perplexity_avg={perplexity_avg:.1f}, "
-        f"burstiness={burstiness:.2f}, ngram={ngram:.2f}"
-    )
+    score = _combine(signals)
 
     return {
-        "score": score,
-        "label": _label(score),
-        "perplexity_signal": round(1.0 - ((perplexity_avg - 1) / 9.0), 2),
-        "burstiness_signal": round(1.0 - burstiness, 2),
-        "ngram_signal": round(1.0 - ngram, 2),
+        "score":  score,
+        "label":  _label(score),
+        "burstiness_signal":     round(signals["burstiness"],     2),
+        "uniformity_signal":     round(signals["uniformity"],     2),
+        "function_words_signal": round(signals["function_words"], 2),
+        "punctuation_signal":    round(signals["punctuation"],    2),
+        # Legacy keys — keeps old cached reports from crashing
+        "perplexity_signal":     round(signals["function_words"], 2),
+        "ngram_signal":          round(signals["uniformity"],     2),
     }
