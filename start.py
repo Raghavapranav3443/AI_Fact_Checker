@@ -77,7 +77,7 @@ REQUIRED_PACKAGES = [
     "fastapi", "uvicorn", "langgraph", "langchain-core",
     "tavily-python", "google-genai", "groq", "httpx",
     "beautifulsoup4", "lxml", "python-dotenv", "aiohttp",
-    "slowapi", "limits",
+    "slowapi", "limits","trafilatura","playwright",
 ]
 
 PLACEHOLDER_MARKERS = [
