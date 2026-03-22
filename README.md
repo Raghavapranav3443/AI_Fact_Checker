@@ -122,8 +122,8 @@ Paste the text from `utils/demo_cache.py` → `DEMO_SCENARIOS` for the exact inp
 
 ## Scoring Map
 
-| Rubric Criterion | Points | How Veritas Addresses It |
-|---|---|---|
+| Rubric Criterion | How Veritas Addresses It |
+|---|---|
 | Claim Extraction accuracy | Groq Llama 3.3 with typed extraction, CoT, 12-claim cap |
 | Evidence Retrieval quality | Triple-query + Wikidata + Wikipedia + WorldBank + OpenFDA |
 | Verification Logic | Cross-model jury + strict grounding + self-reflection |
