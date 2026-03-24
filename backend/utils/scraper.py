@@ -13,7 +13,14 @@ from utils.retry import retry_with_backoff
 logger = logging.getLogger(__name__)
 
 # Global semaphore to limit concurrent browser instances (prevent CPU/RAM spikes)
-_browser_semaphore = asyncio.Semaphore(2)
+# We use a lazy loader to ensure it's attached to the running event loop.
+_BROWSER_SEMAPHORE = None
+
+def get_browser_semaphore():
+    global _BROWSER_SEMAPHORE
+    if _BROWSER_SEMAPHORE is None:
+        _BROWSER_SEMAPHORE = asyncio.Semaphore(2)
+    return _BROWSER_SEMAPHORE
 
 # Modern browser headers to reduce bot detection
 HEADERS = {
@@ -93,9 +100,16 @@ async def _is_private_ip(hostname: str | None) -> bool:
 async def _browser_scrape(url: str) -> dict:
     """Tier 2: Headless browser fallback for JS-rendered content."""
     logger.info(f"Launching browser fallback for: {url}")
-    async with _browser_semaphore:
+    sem = get_browser_semaphore()
+    async with sem:
         async with async_playwright() as p:
-            browser = await p.chromium.launch(headless=True)
+            # On some Windows environments, 'chromium' might not be installed.
+            # We catch specific playwright errors in the outer block.
+            try:
+                browser = await p.chromium.launch(headless=True)
+            except Exception as e:
+                logger.error(f"Playwright chromium launch failed: {e}")
+                raise
             try:
                 context = await browser.new_context(
                     user_agent=HEADERS["User-Agent"],
@@ -177,24 +191,39 @@ async def scrape_url(url: str) -> dict:
             # Re-extract from rendered DOM
             text = await asyncio.to_thread(trafilatura.extract, html) or ""
         except Exception as e:
-            logger.error(f"Browser fallback fatal for {url}: {e}")
+            import traceback
+            logger.error(f"Browser fallback fatal for {url}: {e}\n{traceback.format_exc()}")
 
     # --- Tier 3: Heuristic Fallback (BeautifulSoup) ---
     soup = None
     if not text or len(text.split()) < 35:
         logger.info(f"Tier 1+2 failed to extract quality content. Falling back to BS4 heuristics.")
         if html:
-            soup = await asyncio.to_thread(BeautifulSoup, html, "lxml")
-            for t in soup(SKIP_TAGS): t.decompose()
-            body_el = (
-                soup.find("article") or soup.find("main") or
-                soup.find(attrs={"class": re.compile(r"article|content|story|post|body", re.I)}) or
-                soup.find("body")
-            )
-            if body_el:
-                raw_text = body_el.get_text(separator=" ", strip=True)
+            try:
+                soup = await asyncio.to_thread(BeautifulSoup, html, "lxml")
+                # Decompose noise
+                for t in soup(SKIP_TAGS): 
+                    t.decompose()
+                
+                # Try to find a meaningful container
+                body_el = (
+                    soup.find("article") or 
+                    soup.find("main") or
+                    soup.find(attrs={"class": re.compile(r"article|content|story|post|body|article-body", re.I)}) or
+                    soup.find(attrs={"id": re.compile(r"article|content|story|post|body|article-body", re.I)})
+                )
+                
+                if body_el:
+                    raw_text = body_el.get_text(separator=" ", strip=True)
+                else:
+                    # Last-last resort: grab all remaining text from the whole body
+                    raw_text = soup.get_text(separator=" ", strip=True)
+                
+                # Cleanup whitespace
                 raw_text = re.sub(r"\s{2,}", " ", raw_text).strip()
                 text = re.sub(r"\n{3,}", "\n\n", raw_text)
+            except Exception as e:
+                logger.warning(f"Heuristic fallback failed: {e}")
 
     # --- Image Extraction (BS4 on final HTML) ---
     images = []

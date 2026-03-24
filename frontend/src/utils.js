@@ -25,10 +25,10 @@ export function trustLabel(score) {
 
 export function claimTypeColor(type) {
   const map = {
-    'Temporal':       '#60a5fa',
-    'Statistical':    '#34d399',
-    'Entity-State':   '#a78bfa',
-    'Historical-Fact':'#fbbf24',
+    'Temporal':        '#60a5fa',
+    'Statistical':     '#34d399',
+    'Entity Status':   '#a78bfa',
+    'Historical Fact': '#fbbf24',
   }
   return map[type] || '#8899bb'
 }

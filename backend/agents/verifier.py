@@ -128,7 +128,7 @@ def _calculate_confidence_and_drift(m1, m2, jury_agreed, sources_raw, claim_type
 async def verify_claim(claim: dict, bundle: dict) -> dict:
     claim_id   = claim.get("claim_id", "Unknown")
     claim_text = str(claim.get("claim_text", ""))
-    claim_type = str(claim.get("claim_type", "Historical-Fact"))
+    claim_type = str(claim.get("claim_type", "Historical Fact"))
     sources    = bundle.get("sources", [])
     evidence_text = format_evidence_for_prompt(bundle)
 

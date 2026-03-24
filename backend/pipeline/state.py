@@ -5,6 +5,8 @@ class Claim(TypedDict):
     claim_text: str
     claim_type: str
     source_sentence: str
+    start_char: int
+    end_char: int
 
 class Source(TypedDict):
     url: str

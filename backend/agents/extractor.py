@@ -26,43 +26,59 @@ _ABBREVS = (
 
 def _segment_sentences(text: str) -> list:
     """
-    Split text into sentences robustly.
-    Handles: U.S./U.K. abbreviations, Dr./Mr. titles,
-    decimal numbers, ellipsis, ?/! terminators.
-    Returns list of non-empty sentence strings.
+    Split text into sentences robustly while tracking character offsets.
+    Returns list of dicts: {"text": str, "start": int, "end": int}
     """
-    p = text
+    if not text:
+        return []
 
-    # Protect X.Y. abbreviations — only internal period, keep trailing period
-    # 'U.S.' → 'U\x00S.'  so the trailing '.' can still be a sentence boundary
+    p = text
+    # 1-to-1 protections (preserves length so offsets match original text)
+    # Protect X.Y. abbreviations
     p = re.sub(
         r'\b([A-Z])\.([A-Z])\.',
-        lambda m: m.group(1) + _PA + m.group(2) + '.',
+        lambda m: m.group(1) + "\x00" + m.group(2) + ".",
         p
     )
-
     # Protect word abbreviations (Dr. Mr. Inc. etc.)
     p = re.sub(
         _ABBREVS + r'\.',
-        lambda m: m.group(0).replace('.', _PA),
+        lambda m: m.group(0).replace('.', "\x00"),
         p
     )
-
     # Protect decimal numbers: 3.14 → 3\x0114
-    p = re.sub(r'(\d)\.(\d)', lambda m: m.group(1) + _PD + m.group(2), p)
-
+    p = re.sub(r'(\d)\.(\d)', lambda m: m.group(1) + "\x01" + m.group(2), p)
     # Protect ellipsis
-    p = p.replace('...', _PE)
+    p = p.replace('...', "\x02\x02\x02")
 
-    # Split on real sentence boundary: [.!?] + optional close-quote + space + uppercase
-    parts = re.split(r'(?<=[.!?])[)\"\u2019\u201d]?\s+(?=[A-Z\"\u2018\u201c])', p)
+    # Split pattern using finditer to avoid fragile lookbehinds.
+    # Group 1 = sentence end + optional quote.
+    pattern = r'([.!?][)\"\u2019\u201d]?)\s+(?=[A-Z\"\u2018\u201c])'
+    
+    sentences = []
+    cursor = 0
+    for match in re.finditer(pattern, p):
+        # End of the content (at the space start)
+        content_end = match.end(1)
+        s_text = text[cursor:content_end].strip()
+        if len(s_text) > 5:
+            sentences.append({
+                "text":  s_text,
+                "start": cursor,
+                "end":   content_end
+            })
+        # Next sentence starts after the match
+        cursor = match.end()
 
-    result = []
-    for s in parts:
-        s = s.replace(_PA, '.').replace(_PD, '.').replace(_PE, '...').strip()
-        if s and len(s) > 5:
-            result.append(s)
-    return result
+    # Final sentence
+    s_text = text[cursor:].strip()
+    if len(s_text) > 5:
+        sentences.append({
+            "text":  s_text,
+            "start": cursor,
+            "end":   len(text)
+        })
+    return sentences
 
 
 # ── Extraction prompt ─────────────────────────────────────────────────────────
@@ -82,32 +98,32 @@ RULES:
 1. Each claim must be a single, standalone verifiable statement. If one sentence contains two facts, extract two separate claims both citing the same sentence index.
 2. Extract ONLY objective facts that are independently verifiable with a web search. Exclude opinions, predictions, and speculation.
 3. Classify each claim as exactly one of:
-   - Temporal: current officeholders, ongoing events, recent statistics (may change over time)
-   - Statistical: specific numbers, percentages, quantities, measurements
-   - Entity-State: current status/condition of a person, company, or thing
-   - Historical-Fact: past events, founding dates, historical records that do not change
+   - Temporal: Current status or events that may change (e.g., current leaders, stock prices, active status).
+   - Statistical: Numerical data, specific counts, percentages, or quantitative measurements.
+   - Entity Status: Organizational or structural state (e.g., "is a non-profit", "is headquartered in X", "uses technology Y").
+   - Historical Fact: Fixed past events, founding dates, past records, or biographical history.
 4. Extract a MAXIMUM of 12 claims. Prioritise claims with specific numbers, names, or dates — these are the most independently verifiable.
 5. Return ONLY a valid JSON array. No preamble. No markdown fences.
 
 EXAMPLES OF GOOD vs BAD CLAIMS:
-Good: "The WHO was established on April 7, 1948." (Historical-Fact — specific date, verifiable)
+Good: "The WHO was established on April 7, 1948." (Historical Fact — specific date, verifiable)
 Good: "The WHO has 194 member states." (Statistical — specific number, verifiable)
 Bad:  "The WHO plays an important role in global health." (opinion, not verifiable)
 Bad:  "Experts believe AI may transform healthcare." (speculation)
 Bad:  "The organization was founded and is headquartered in Geneva." (two facts — split into two claims)
 
 CLAIM TYPES — ONE EXAMPLE EACH:
-Temporal:        "Dr. Tedros Adhanom Ghebreyesus is the current WHO Director-General." (could change)
-Statistical:     "Microsoft invested $13 billion in OpenAI in 2023." (specific number)
-Entity-State:    "OpenAI is structured as a capped-profit company." (current status)
-Historical-Fact: "Apple was founded by Steve Jobs and Steve Wozniak in 1976." (past event, fixed)
+Temporal:        "Dr. Tedros Adhanom Ghebreyesus is the current WHO Director-General."
+Statistical:     "Microsoft invested $13 billion in OpenAI in 2023."
+Entity Status:    "OpenAI is structured as a capped-profit company."
+Historical Fact: "Apple was founded by Steve Jobs and Steve Wozniak in 1976."
 
 JSON SCHEMA — output exactly this structure:
 [
   {{
     "claim_id": 1,
     "claim_text": "Single atomic verifiable fact as a clean sentence.",
-    "claim_type": "Temporal|Statistical|Entity-State|Historical-Fact",
+    "claim_type": "Temporal|Statistical|Entity Status|Historical Fact",
     "sentence_index": 0
   }}
 ]
@@ -148,16 +164,17 @@ async def extract_claims(article_text: str) -> List[dict]:
     # Cap at 12000 chars total to stay within model context while covering ~2400 words
     numbered_lines = []
     total_chars = 0
-    included_sentences = []
-    for i, s in enumerate(sentences):
-        line = f"[{i}] {s}"
+    # sentences is now a list of dicts: {text, start, end}
+    for i, s_dict in enumerate(sentences):
+        line = f"[{i}] {s_dict['text']}"
         total_chars += len(line)
         if total_chars > 12000:
             logger.info(f"Article truncated at sentence {i} ({total_chars} chars)")
             break
         numbered_lines.append(line)
-        included_sentences.append(s)
 
+    included_count = len(numbered_lines)
+    included_sentences = sentences[:included_count]
     numbered_sentences = "\n".join(numbered_lines)
 
     # Step 3: call model
@@ -174,68 +191,91 @@ async def extract_claims(article_text: str) -> List[dict]:
         return []
 
     valid_claims = []
-    valid_types  = {"Temporal", "Statistical", "Entity-State", "Historical-Fact"}
+    valid_types  = {"Temporal", "Statistical", "Entity Status", "Historical Fact"}
 
     for item in parsed:
         if not isinstance(item, dict):
             continue
 
         claim_text = str(item.get("claim_text", "")).strip()
-        claim_type = str(item.get("claim_type", "Historical-Fact")).strip()
+        raw_type   = str(item.get("claim_type", "Historical Fact")).strip()
+
+        # Normalization: handle hyphens and case for robustness
+        # e.g., "Historical-Fact" -> "Historical Fact"
+        norm_type = raw_type.replace("-", " ").title()
+        if norm_type in valid_types:
+            claim_type = norm_type
+        else:
+            claim_type = "Historical Fact"
 
         # Validate claim text
         if not claim_text or len(claim_text) < 10:
             continue
 
-        # Validate/normalise claim type
-        if claim_type not in valid_types:
-            claim_type = "Historical-Fact"
-
         # Resolve source_sentence from sentence_index — deterministic, no hallucination
         sentence_index = item.get("sentence_index")
+        source_sentence = claim_text # fallback
+        start_char = 0
+        end_char = 0
+
         if isinstance(sentence_index, (int, float)):
             idx = int(sentence_index)
-            if 0 <= idx < len(included_sentences):
-                source_sentence = included_sentences[idx]
+            if 0 <= idx < included_count:
+                source_sentence = included_sentences[idx]["text"]
+                start_char = included_sentences[idx]["start"]
+                end_char = included_sentences[idx]["end"]
             else:
-                # Index out of range — fall back to nearest sentence via claim_text search
-                source_sentence = _find_nearest_sentence(claim_text, included_sentences)
+                # Index out of range — fall back via search
+                matched = _find_nearest_sentence(claim_text, included_sentences)
+                source_sentence = matched["text"]
+                start_char = matched["start"]
+                end_char = matched["end"]
         else:
             # Model didn't return an index — find best matching sentence
-            source_sentence = _find_nearest_sentence(claim_text, included_sentences)
+            matched = _find_nearest_sentence(claim_text, included_sentences)
+            source_sentence = matched["text"]
+            start_char = matched["start"]
+            end_char = matched["end"]
 
         valid_claims.append({
             "claim_id":        len(valid_claims) + 1,
             "claim_text":      claim_text,
             "claim_type":      claim_type,
             "source_sentence": source_sentence,
+            "start_char":      start_char,
+            "end_char":        end_char,
         })
+
+    # Step 5: Final sort by document order for intuitive labeling
+    valid_claims.sort(key=lambda x: (x.get("start_char", 0), x.get("end_char", 0)))
+    for i, c in enumerate(valid_claims):
+        c["claim_id"] = i + 1
 
     logger.info(f"Extracted {len(valid_claims)} valid claims from {len(sentences)} sentences")
     return valid_claims
 
 
-def _find_nearest_sentence(claim_text: str, sentences: list) -> str:
+def _find_nearest_sentence(claim_text: str, sentences: list) -> dict:
     """
     Fallback: find the sentence that shares the most words with the claim.
-    Used when model returns no/invalid sentence_index.
-    Returns the best matching sentence, or claim_text if nothing matches.
+    Returns the full sentence dict {text, start, end}.
     """
     if not sentences:
-        return claim_text
+        return {"text": claim_text, "start": 0, "end": 0}
 
     claim_words = set(claim_text.lower().split())
     best_score  = 0
     best_sent   = sentences[0]
 
-    for s in sentences:
-        sent_words = set(s.lower().split())
-        # Jaccard-like overlap: shared words / claim words
+    for s_dict in sentences:
+        sent_words = set(s_dict["text"].lower().split())
         overlap = len(claim_words & sent_words) / max(len(claim_words), 1)
         if overlap > best_score:
             best_score = overlap
-            best_sent  = s
+            best_sent  = s_dict
 
-    # If overlap is too low (< 20%), the claim may be invented — return claim_text
-    # so TextAnnotator falls back gracefully rather than highlighting the wrong sentence
-    return best_sent if best_score >= 0.2 else claim_text
+    # Return the best sentence dict if score is high enough, else dummy
+    if best_score >= 0.2:
+        return best_sent
+    else:
+        return {"text": claim_text, "start": 0, "end": 0}

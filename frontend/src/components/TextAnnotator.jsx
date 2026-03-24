@@ -80,70 +80,77 @@ function buildPosMap(origText) {
 }
 
 export default function TextAnnotator({ text, claims, selectedClaimId, onSelectClaim }) {
-  const annotated = useMemo(() => {
-    if (!text || !claims?.length) return [{ type: 'text', content: text || '' }]
+    const annotated = useMemo(() => {
+      if (!text || !claims?.length) return [{ type: 'text', content: text || '' }]
 
-    const normText = normalise(text)
-    const posMap = buildPosMap(text)
+      // Group claims by their character offsets to handle multi-claim sentences
+      const groups = []
+      claims.forEach(c => {
+        // Only process claims with valid offsets from backend
+        if (typeof c.start_char !== 'number' || typeof c.end_char !== 'number') return
+        if (c.start_char === 0 && c.end_char === 0) return // Fallback failed
 
-    const matched = claims
-      .filter(c => {
-        // source_sentence takes priority; fall back to claim_text.
-        // Guard against whitespace-only strings which normalise to '' and can't match.
-        const s = normalise(c.source_sentence || c.claim_text || '')
-        return s.length >= 10
+        let group = groups.find(g => g.start === c.start_char && g.end === c.end_char)
+        if (group) {
+          group.claims.push(c)
+        } else {
+          groups.push({ start: c.start_char, end: c.end_char, claims: [c] })
+        }
       })
-      .map(c => {
-        const normSentence = normalise(c.source_sentence || c.claim_text)
-        const match = findMatch(normText, normSentence)
-        if (!match) return null
-        // Convert norm positions → orig positions via posMap
-        const origStart = posMap[match.start] ?? match.start
-        const origEnd = posMap[Math.min(match.end, posMap.length - 1)] ?? match.end
-        return { claim: c, origStart, origEnd }
-      })
-      .filter(Boolean)
-      .sort((a, b) => a.origStart - b.origStart)
 
-    if (!matched.length) return [{ type: 'text', content: text }]
+      // Sort groups by appearance
+      groups.sort((a, b) => a.start - b.start)
 
-    const segments = []
-    let cursor = 0
+      if (!groups.length) return [{ type: 'text', content: text }]
 
-    for (const { claim, origStart, origEnd } of matched) {
-      // Skip overlapping matches — first claim in text order wins
-      if (origStart < cursor) continue
+      const segments = []
+      let cursor = 0
 
-      if (origStart > cursor) {
-        segments.push({ type: 'text', content: text.slice(cursor, origStart) })
+      for (const group of groups) {
+        // Skip overlapping segments (shouldn't happen with sentence-based extraction, but for safety)
+        if (group.start < cursor) continue
+
+        if (group.start > cursor) {
+          segments.push({ type: 'text', content: text.slice(cursor, group.start) })
+        }
+
+        const end = Math.min(group.end, text.length)
+        segments.push({
+          type: 'highlight',
+          content: text.slice(group.start, end),
+          claims: group.claims
+        })
+        cursor = end
       }
 
-      const end = Math.min(origEnd, text.length)
-      segments.push({ type: 'highlight', content: text.slice(origStart, end), claim })
-      cursor = end
-    }
+      if (cursor < text.length) {
+        segments.push({ type: 'text', content: text.slice(cursor) })
+      }
 
-    if (cursor < text.length) {
-      segments.push({ type: 'text', content: text.slice(cursor) })
-    }
+      return segments
+    }, [text, claims])
 
-    return segments
-  }, [text, claims])
+    // Use stable ID from backend for numbering to keep consistency with sidebar
+    const displayNumMap = useMemo(() => {
+      const map = {}
+      claims?.forEach(c => {
+        map[c.claim_id] = c.claim_id
+      })
+      return map
+    }, [claims])
 
-  // Sequential display numbers based solely on highlighted claims in text order.
-  // Avoids gaps like #1 → #4 when some claims fail to match.
-  const displayNumMap = useMemo(() => {
-    const map = {}
-    let n = 1
-    for (const seg of annotated) {
-      if (seg.type === 'highlight') map[seg.claim.claim_id] = n++
-    }
-    return map
-  }, [annotated])
+    const highlightedCount = useMemo(() => {
+      const ids = new Set()
+      annotated.forEach(seg => {
+        if (seg.type === 'highlight') {
+          seg.claims.forEach(c => ids.add(c.claim_id))
+        }
+      })
+      return ids.size
+    }, [annotated])
 
-  const highlightedCount = Object.keys(displayNumMap).length
-  const totalCount = claims?.length || 0
-  const missedCount = totalCount - highlightedCount
+    const totalCount = claims?.length || 0
+    const missedCount = totalCount - highlightedCount
 
   return (
     <div className="text-annotator">
@@ -180,10 +187,16 @@ export default function TextAnnotator({ text, claims, selectedClaimId, onSelectC
             return <span key={i}>{seg.content}</span>
           }
 
-          const { claim } = seg
-          const vm = claim.verdict ? getVerdict(claim.verdict) : null
-          const isSelected = selectedClaimId === claim.claim_id
-          const displayNum = displayNumMap[claim.claim_id] ?? claim.claim_id
+          const { claims: groupClaims } = seg
+          // Pick a representative verdict for coloring (priority: FALSE > CONTESTED > PARTIAL > UNVERIFIABLE > TRUE)
+          const verdictPriority = { 'FALSE': 5, 'CONTESTED': 4, 'PARTIALLY TRUE': 3, 'UNVERIFIABLE': 2, 'TRUE': 1, null: 0 }
+          const representativeClaim = [...groupClaims].sort((a, b) => 
+            (verdictPriority[b.verdict] || 0) - (verdictPriority[a.verdict] || 0)
+          )[0]
+          
+          const vm = representativeClaim.verdict ? getVerdict(representativeClaim.verdict) : null
+          const isSelected = groupClaims.some(c => c.claim_id === selectedClaimId)
+          const titleText = groupClaims.map(c => `Claim #${c.claim_id}: ${c.verdict || 'pending'}`).join('\n')
 
           return (
             <mark
@@ -194,11 +207,15 @@ export default function TextAnnotator({ text, claims, selectedClaimId, onSelectC
                 '--mark-bg': vm?.bg || 'rgba(136,153,187,0.1)',
                 '--mark-border': vm?.border || 'rgba(136,153,187,0.2)',
               }}
-              onClick={() => onSelectClaim(claim.claim_id)}
-              title={`Claim #${displayNum}: ${claim.verdict || 'pending'}`}
+              onClick={() => onSelectClaim(groupClaims[0].claim_id)}
+              title={titleText}
             >
               {seg.content}
-              <sup className="ta-sup mono">#{displayNum}</sup>
+              {groupClaims.map((c, idx) => (
+                <sup key={c.claim_id} className="ta-sup mono">
+                  {idx > 0 && ','}#{displayNumMap[c.claim_id]}
+                </sup>
+              ))}
             </mark>
           )
         })}
