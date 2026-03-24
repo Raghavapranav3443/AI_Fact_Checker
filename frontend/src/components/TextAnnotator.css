@@ -72,7 +72,8 @@
 .ta-sup {
   font-size: 0.55rem;
   color: var(--mark-color);
-  margin-left: 1px;
+  margin-left: 0.5px;
   vertical-align: super;
-  opacity: 0.8;
+  opacity: 0.85;
+  letter-spacing: -0.5px;
 }

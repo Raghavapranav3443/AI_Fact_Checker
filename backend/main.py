@@ -1,5 +1,13 @@
 import logging
 import os
+import sys
+import asyncio
+
+if sys.platform == 'win32':
+    # Playwright requires ProactorEventLoop to launch subprocesses on Windows.
+    # We set this policy BEFORE the loop is started by uvicorn.
+    asyncio.set_event_loop_policy(asyncio.WindowsProactorEventLoopPolicy())
+
 import time
 import uuid
 from fastapi import FastAPI, Request, status
