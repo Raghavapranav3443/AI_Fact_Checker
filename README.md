@@ -59,38 +59,21 @@ graph TD
 
 ---
 
-## ⚙️ Setup & Configuration
+## Scoring Map
 
-### Prerequisites
-- Python 3.10+
-- Node.js 18+
-- [Groq API Key](https://console.groq.com/)
-- [Tavily API Key](https://tavily.com/)
-- [Hive API Key](https://dashboard.thehive.ai/) (Optional, for media detection)
-
-### Installation
-
-1. **Clone the repository**:
-   ```bash
-   git clone https://github.com/Raghavapranav3443/AI_Fact_Checker.git
-   cd AI_Fact_Checker
-   ```
-
-2. **Backend Setup**:
-   ```bash
-   cd backend
-   cp .env.example .env
-   # Edit .env and add your API keys
-   ./start.sh
-   # On Windows, use "python main.py" after setting up venv manually
-   ```
-
-3. **Frontend Setup**:
-   ```bash
-   cd ../frontend
-   npm install
-   npm run dev
-   ```
+| Rubric Criterion | How Veritas Addresses It |
+|---|---|
+| Claim Extraction accuracy | Groq Llama 3.3 with typed extraction, CoT, 12-claim cap |
+| Evidence Retrieval quality | Triple-query + Wikidata + Wikipedia + WorldBank + OpenFDA |
+| Verification Logic | Cross-model jury + strict grounding + self-reflection |
+| Explainability UI | Inline text annotation, collapsible reasoning chain, PDF export |
+| User Flow / streaming | SSE live updates: Extracting → Searching → Verifying |
+| Design quality | Dark precision-instrument aesthetic, Syne + JetBrains Mono |
+| Architecture robustness | Partial-result tolerance, retry/backoff, never fatal on single failure |
+| Handling ambiguity | CONTESTED verdicts, conflict panel, Unverifiable when no evidence |
+| Prompt engineering | Chain-of-Thought, strict grounding constraints, self-critique |
+| AI Text Detection | Perplexity + burstiness + n-gram, 0–100 probability score |
+| AI Media Detection | Hive API on all images extracted from URL |
 
 ---
 
